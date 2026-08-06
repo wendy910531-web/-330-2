@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>歡樂園遊會 3D 迷宮 (不頭暈版)</title>
+    <title>歡樂園遊會 3D 迷宮</title>
     <style>
         * { box-sizing: border-box; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
         html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #87ceeb; font-family: sans-serif; }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
 
-        /* 頂部輕量化標題 */
+        /* 頂部標題 */
         #header-banner {
             position: absolute; top: 8px; left: 12px; z-index: 10;
             background: rgba(255, 71, 87, 0.9); color: #fff; padding: 4px 12px;
@@ -33,7 +33,7 @@
         }
         .key-slot { display: flex; flex-direction: column; align-items: center; opacity: 0.3; }
         .key-slot.active { opacity: 1; }
-        .key-icon { width: 20px; height: 20px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; color: #fff; font-size: 11px; }
+        .key-icon { width: 22px; height: 22px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; color: #fff; font-size: 11px; }
         .key-count { color: #333; font-size: 9px; font-weight: bold; }
 
         .c-國 { background-color: #ff4757; }
@@ -42,7 +42,7 @@
         .c-社 { background-color: #1e90ff; }
         .c-自 { background-color: #9b59b6; }
 
-        /* 手機按鍵控制區 (簡化不占空間) */
+        /* 手機按鈕 (前/後/左轉/右轉) */
         #mobile-controls {
             position: absolute; bottom: 15px; left: 0; width: 100%; z-index: 10;
             display: flex; justify-content: space-between; padding: 0 20px;
@@ -62,7 +62,8 @@
         .overlay.show { display: flex; }
         .popup-card { background: #fff; color: #333; padding: 16px; border-radius: 16px; width: 85%; max-width: 340px; text-align: center; border: 3px solid #ff7f50; }
         .options-grid { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px; }
-        .opt-btn { background: #f1f2f6; color: #333; border: 1px solid #ddd; padding: 10px; border-radius: 8px; font-weight: bold; }
+        .opt-btn { background: #f1f2f6; color: #333; border: 1px solid #ddd; padding: 10px; border-radius: 8px; font-weight: bold; text-align: left; }
+        .opt-btn:active { background: #ffeaa7; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 </head>
@@ -83,7 +84,6 @@
         <div class="key-slot" id="hud-自"><div class="key-icon c-自">自</div><div class="key-count">x0</div></div>
     </div>
 
-    <!-- 手機按鈕 (前/後/左轉/右轉) -->
     <div id="mobile-controls">
         <div class="btn-group">
             <div class="ctrl-btn" id="btn-left">◀</div>
@@ -107,7 +107,7 @@
         <div class="popup-card">
             <h3 id="msg-title" style="color:#ff4757; margin-top:0;">訊息</h3>
             <p id="msg-body" style="font-size:13px;"></p>
-            <button onclick="closeOverlay('msg-popup')" style="padding:8px 20px; background:#ff7f50; color:#fff; border:none; border-radius:8px; font-weight:bold;">確定</button>
+            <button onclick="closeOverlay('msg-popup')" style="padding:8px 20px; background:#ff7f50; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">確定</button>
         </div>
     </div>
 
@@ -115,13 +115,14 @@
         <div class="popup-card" style="border-color:#f1c40f;">
             <h2 style="color:#ffa502; margin:0;">🎉 園遊會通關！</h2>
             <p style="font-size:14px;">恭喜成功走出園遊會圓形迷宮！</p>
-            <button onclick="location.reload()" style="padding:10px 20px; background:#2ed573; color:#fff; border:none; border-radius:10px; font-weight:bold;">再玩一次</button>
+            <button onclick="location.reload()" style="padding:10px 20px; background:#2ed573; color:#fff; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">再玩一次</button>
         </div>
     </div>
 
     <script>
         const subList = ['國', '英', '數', '社', '自'];
         const subColorsHex = { '國': 0xff4757, '英': 0xffa502, '數': 0x2ed573, '社': 0x1e90ff, '自': 0x9b59b6 };
+        const subColorsCss = { '國': '#ff4757', '英': '#ffa502', '數': '#2ed573', '社': '#1e90ff', '自': '#9b59b6' };
 
         const quizBank = {
             '國': [{ q: "「沉魚落雁」常用來形容女子的什麼？", o: ["A. 武藝超群", "B. 容貌極美", "C. 歌聲動聽"], a: 1 }],
@@ -148,11 +149,10 @@
         sun.position.set(10, 20, 10);
         scene.add(sun);
 
-        // 玩家角色與視角設置
+        // 玩家角色與防暈視角
         const playerGroup = new THREE.Group();
         scene.add(playerGroup);
 
-        // 建立可愛小玩家代表（小氣球人）
         const playerBody = new THREE.Mesh(
             new THREE.SphereGeometry(0.5, 16, 16),
             new THREE.MeshStandardMaterial({ color: 0xff4757 })
@@ -160,13 +160,12 @@
         playerBody.position.y = 0.5;
         playerGroup.add(playerBody);
 
-        // 相機固定在玩家後上方，防暈眩
-        camera.position.set(0, 2.5, 4.5);
+        camera.position.set(0, 2.8, 4.5);
         camera.lookAt(0, 0.5, -2);
         playerGroup.add(camera);
 
         playerGroup.position.set(36, 0, 0);
-        playerGroup.rotation.y = -Math.PI / 2; // 起始朝內
+        playerGroup.rotation.y = -Math.PI / 2;
 
         // 草地
         const floor = new THREE.Mesh(
@@ -176,7 +175,7 @@
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
 
-        // 牆壁
+        // 圓形牆壁
         const wallRadius = [10, 20, 30];
         const walls = [];
         const wallMatA = new THREE.MeshStandardMaterial({ color: 0xff6b81 });
@@ -203,22 +202,43 @@
             }
         });
 
-        // 互動點
+        // 生成文字貼圖 (重新把國英數社自文字做回來)
+        function createSubjectTexture(sub) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = subColorsCss[sub]; ctx.fillRect(0,0,128,128);
+            ctx.fillStyle = '#ffffff'; ctx.font = 'bold 70px sans-serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(sub, 64, 64);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // 生成闖關攤位 (🎪 題目)
         const interactables = [];
         const quizAngles = [0.5, 2.2, 3.8, 4.8, 5.5];
         subList.forEach((sub, i) => {
             const r = wallRadius[i % 3];
             const ang = quizAngles[i];
-            const mesh = new THREE.Mesh(
-                new THREE.BoxGeometry(1, 1.2, 0.2),
-                new THREE.MeshBasicMaterial({ color: subColorsHex[sub] })
+            
+            const group = new THREE.Group();
+            
+            // 題目立牌
+            const tex = createSubjectTexture(sub);
+            const sign = new THREE.Mesh(
+                new THREE.BoxGeometry(1.2, 1.2, 0.2),
+                new THREE.MeshBasicMaterial({ map: tex })
             );
-            mesh.position.set(Math.cos(ang) * r, 0.5, Math.sin(ang) * r);
-            mesh.userData = { type: 'Q', sub: sub };
-            scene.add(mesh);
-            interactables.push(mesh);
+            sign.position.y = 0.6;
+            group.add(sign);
+
+            group.position.set(Math.cos(ang) * r, 0, Math.sin(ang) * r);
+            group.userData = { type: 'Q', sub: sub };
+            scene.add(group);
+            interactables.push(group);
         });
 
+        // 生成禮物盒 (🎁)
         const boxAngles = [1.2, 2.9, 4.1, 5.1, 6.0];
         subList.forEach((sub, i) => {
             const r = wallRadius[i % 3] + (i % 2 === 0 ? 4 : -4);
@@ -233,6 +253,7 @@
             interactables.push(mesh);
         });
 
+        // 出口舞台
         const portal = new THREE.Mesh(
             new THREE.CylinderGeometry(2, 2, 3.5, 16),
             new THREE.MeshBasicMaterial({ color: 0xf1c40f, transparent: true, opacity: 0.6 })
@@ -242,10 +263,9 @@
         scene.add(portal);
         interactables.push(portal);
 
-        // 跨平台操作狀態 (電腦 + 手機)
+        // 鍵盤與手機輸入控制器
         const inputs = { forward: false, backward: false, left: false, right: false };
 
-        // 1. 電腦鍵盤監聽
         window.addEventListener('keydown', e => {
             const k = e.key.toLowerCase();
             if (k === 'w' || k === 'arrowup') inputs.forward = true;
@@ -262,7 +282,6 @@
             if (k === 'd' || k === 'arrowright') inputs.right = false;
         });
 
-        // 2. 手機觸控監聽
         function bindBtn(id, key) {
             const btn = document.getElementById(id);
             btn.addEventListener('touchstart', (e) => { e.preventDefault(); inputs[key] = true; });
@@ -278,11 +297,9 @@
         function updatePlayer() {
             if (document.querySelector('.overlay.show')) return;
 
-            // 轉向
             if (inputs.left) playerGroup.rotation.y += 0.04;
             if (inputs.right) playerGroup.rotation.y -= 0.04;
 
-            // 直線前後移動
             let moveDist = 0;
             if (inputs.forward) moveDist -= 0.12;
             if (inputs.backward) moveDist += 0.08;
@@ -291,7 +308,6 @@
                 const moveVec = new THREE.Vector3(0, 0, moveDist).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerGroup.rotation.y);
                 let newPos = playerGroup.position.clone().add(moveVec);
 
-                // 牆壁碰撞測試
                 let collide = false;
                 for (let wall of walls) {
                     if (new THREE.Box3().setFromObject(wall).intersectsBox(new THREE.Box3().setFromCenterAndSize(newPos, new THREE.Vector3(0.8, 1.8, 0.8)))) {
@@ -301,9 +317,8 @@
                 if (!collide) playerGroup.position.copy(newPos);
             }
 
-            // 自動觸發關卡
             interactables.forEach(obj => {
-                if (playerGroup.position.distanceTo(obj.position) < 1.4 && !gameState.nearCooldown) {
+                if (playerGroup.position.distanceTo(obj.position) < 1.5 && !gameState.nearCooldown) {
                     triggerInteraction(obj);
                 }
             });
@@ -315,6 +330,7 @@
                 gameState.nearCooldown = true;
                 const q = quizBank[data.sub][0];
                 document.getElementById('quiz-title').textContent = `🎪 闖關：《${data.sub}》`;
+                document.getElementById('quiz-title').style.color = subColorsCss[data.sub];
                 document.getElementById('quiz-text').textContent = q.q;
 
                 const optsEl = document.getElementById('quiz-options');
@@ -329,9 +345,9 @@
                             gameState.keyCounts[data.sub]++;
                             updateHUD();
                             scene.remove(obj);
-                            showMsg('答對了！', `成功完成【${data.sub}】挑戰！`);
+                            showMsg('答對了！', `成功完成【${data.sub}】闖關，拿到集章了！`);
                         } else {
-                            showMsg('答錯了', '重新走回去挑戰看看！');
+                            showMsg('答錯囉！', '走回去重新挑戰看看吧！');
                         }
                         setTimeout(() => gameState.nearCooldown = false, 1500);
                     };
@@ -345,12 +361,16 @@
                     gameState.keyCounts[data.sub]--;
                     updateHUD();
                     scene.remove(obj);
-                    showMsg('拆開禮物！', `🎁 獲得過關提示：自然科答案為 B！`);
+                    showMsg('拆開禮物盒！', `🎁 獲得過關提示：自然科答案為 B！`);
                     setTimeout(() => gameState.nearCooldown = false, 1500);
                 }
             } else if (data.type === 'E') {
                 if (subList.every(s => gameState.keysLit[s])) {
                     showOverlay('cert-popup');
+                } else {
+                    gameState.nearCooldown = true;
+                    showMsg('提示', '集齊 5 科集章才可以進入中央舞台通關喔！');
+                    setTimeout(() => gameState.nearCooldown = false, 1500);
                 }
             }
         }
