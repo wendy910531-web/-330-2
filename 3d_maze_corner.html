@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D 第一人稱迷宮 + 2D 全功能地圖</title>
+    <title>3D 牆角探索迷宮 RPG</title>
     <style>
         body {
             margin: 0;
@@ -18,24 +18,38 @@
             height: 100vh;
         }
 
-        /* 準心 */
+        /* FPS 準心 */
         #crosshair {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 24px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 20px;
             pointer-events: none;
         }
 
-        /* 右上角 2D 實體電子地圖 */
+        /* 畫面中央提示：點擊鎖定視角 */
+        #instructions {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        /* 右上角 2D 電子地圖 */
         #minimap-card {
             position: absolute;
             top: 15px;
             right: 15px;
-            width: 160px;
-            height: 160px;
+            width: 150px;
+            height: 150px;
             background: rgba(15, 23, 42, 0.85);
             border: 2px solid #38bdf8;
             border-radius: 8px;
@@ -44,16 +58,11 @@
             flex-direction: column;
             align-items: center;
             padding: 5px;
-        }
-        #minimap-title {
-            color: #38bdf8;
-            font-size: 10px;
-            font-weight: bold;
-            margin-bottom: 3px;
+            pointer-events: none;
         }
         #minimap-canvas {
-            width: 150px;
-            height: 150px;
+            width: 140px;
+            height: 140px;
             background: #020617;
             border-radius: 4px;
         }
@@ -71,6 +80,7 @@
             border: 1px solid #38bdf8;
             display: none;
             font-size: 14px;
+            pointer-events: none;
         }
 
         /* 下方 5 色鑰匙 HUD */
@@ -85,6 +95,7 @@
             justify-content: center;
             align-items: center;
             gap: 20px;
+            pointer-events: none;
         }
         .key-slot {
             display: flex;
@@ -151,7 +162,6 @@
         }
         .opt-btn:hover { background: #475569; }
     </style>
-    <!-- Three.js 3D 渲染庫 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -159,10 +169,16 @@
     <div id="canvas-container"></div>
     <div id="crosshair">+</div>
 
-    <!-- 右上角 2D 實體電子地圖容器 -->
+    <!-- 開始提示 -->
+    <div id="instructions">
+        <h1 style="margin:0; color:#38bdf8;">點擊畫面進入 3D 迷宮</h1>
+        <p style="margin-top:10px;">[ W A S D ] 移動 | [ 滑鼠 ] 旋轉 3D 視角 | [ E ] 互動</p>
+        <p style="font-size:12px; color:#aaa;">( 按 ESC 鍵可釋放滑鼠 )</p>
+    </div>
+
+    <!-- 右上角 2D 電子地圖 -->
     <div id="minimap-card">
-        <div id="minimap-title">GPS 雷達地圖</div>
-        <canvas id="minimap-canvas" width="150" height="150"></canvas>
+        <canvas id="minimap-canvas" width="140" height="140"></canvas>
     </div>
 
     <div id="interaction-prompt">按 [ E ] 鍵互動</div>
@@ -185,7 +201,7 @@
         </div>
     </div>
 
-    <!-- 訊息/開箱視窗 -->
+    <!-- 訊息視窗 -->
     <div class="overlay" id="msg-popup">
         <div class="popup-card">
             <h3 id="msg-title">獲得情報</h3>
@@ -197,13 +213,11 @@
     <!-- 電子認證書 -->
     <div class="overlay" id="cert-popup">
         <div class="popup-card" style="border-color:gold;">
-            <h1 style="color:gold; margin-top:0;">全能冒險家認證書</h1>
-            <p>恭喜通關！成功帶領角色走出 3D 第一人稱迷宮！</p>
+            <h1 style="color:gold; margin-top:0;">全能視角冒險家</h1>
+            <p>恭喜探索完全部牆角死巷，成功走出 3D 迷宮！</p>
             <div style="text-align:left; background:rgba(255,255,255,0.05); padding:12px; border-radius:8px; margin:15px 0; font-size:14px;">
-                <p style="margin:4px 0;">冒險者：李同學</p>
                 <p style="margin:4px 0;">通關時間：<span id="cert-time">0</span> 秒</p>
-                <p style="margin:4px 0;">開啟寶箱數：<span id="cert-boxes">0</span> 個</p>
-                <p style="margin:4px 0;">認證標籤：國英數社自 5 色鑰匙全集齊</p>
+                <p style="margin:4px 0;">找到牆角寶箱：<span id="cert-boxes">0</span> 個</p>
             </div>
             <button onclick="location.reload()" style="padding:10px 24px; background:gold; border:none; font-weight:bold; cursor:pointer;">重新挑戰</button>
         </div>
@@ -217,9 +231,9 @@
 
         const quizBank = {
             '國': [{ q: "「沉魚落雁」常用來形容女子的什麼？", o: ["A. 武藝超群", "B. 容貌極美", "C. 歌聲動聽", "D. 聰明絕頂"], a: 1 }],
-            '英': [{ q: "請選出正確的動詞：She _______ to school every day.", o: ["A. go", "B. goes", "C. going", "D. went"], a: 1 }],
+            '英': [{ q: "請選出正確動詞：She _______ to school every day.", o: ["A. go", "B. goes", "C. going", "D. went"], a: 1 }],
             '數': [{ q: "解方程式：2x + 6 = 14，則 x = ?", o: ["A. 3", "B. 4", "C. 5", "D. 8"], a: 1 }],
-            '社': [{ q: "台灣主要位於哪兩個板塊的交界處？", o: ["A. 歐亞與菲律賓海板塊", "B. 太平洋與美洲板塊", "C. 印澳與歐亞板塊", "D. 非洲與歐亞板塊"], a: 0 }],
+            '社': [{ q: "台灣主要位於哪兩個板塊交界處？", o: ["A. 歐亞與菲律賓海板塊", "B. 太平洋與美洲板塊", "C. 印澳與歐亞板塊", "D. 非洲與歐亞板塊"], a: 0 }],
             '自': [{ q: "下列何者屬於「物理變化」？", o: ["A. 光合作用", "B. 食物消化", "C. 水結成冰", "D. 木材燃燒"], a: 2 }]
         };
 
@@ -231,21 +245,9 @@
             isGameOver: false,
             nearInteractable: null
         };
-// 建立 3D 牆角寶箱
-if (item.type === 'B') {
-    const geo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
-    const mat = new THREE.MeshStandardMaterial({ color: subColorsHex[item.sub], roughness: 0.3 });
-    mesh = new THREE.Mesh(geo, mat);
-    
-    // 將寶箱從格子中心 (0, 0) 推向牆角偏移量 (-1.2, -1.2)，使其緊貼牆壁
-    const cornerOffsetX = -1.2; 
-    const cornerOffsetZ = -1.2;
-    
-    mesh.position.set(item.gridX * UNIT + cornerOffsetX, -1.1, item.gridY * UNIT + cornerOffsetZ);
-    mesh.rotation.y = Math.PI / 4; // 傾斜 45 度擺放，更貼合直角牆面
-}
-        // --- 2. 2D 迷宮矩陣數據 (1:牆, 0:通道) ---
-        const UNIT = 4; // 3D 空間網格尺度
+
+        // --- 2. 2D 迷宮陣列 (1:牆, 0:路) ---
+        const UNIT = 4;
         const mazeGrid = [
             [1,1,1,1,1,1,1,1,1,1,1,1,1],
             [1,0,0,0,1,0,0,0,0,0,0,0,1],
@@ -260,16 +262,16 @@ if (item.type === 'B') {
             [1,1,1,1,1,1,1,1,1,1,1,1,1]
         ];
 
-        // 題目(Q)、寶箱(B)、出口(E) 埋點數據
+        // 題目(Q)與死胡同牆角寶箱(B)配置 (offsetX/offsetZ 代表貼牆偏移)
         const interactablesData = [
             { gridY: 1, gridX: 3, type: 'Q', sub: '國' },
-            { gridY: 3, gridX: 7, type: 'B', sub: '國' },
+            { gridY: 3, gridX: 1, type: 'B', sub: '國', offsetX: -1.3, offsetZ: -1.3 }, // 死巷牆角
             { gridY: 5, gridX: 1, type: 'Q', sub: '英' },
-            { gridY: 7, gridX: 5, type: 'B', sub: '英' },
+            { gridY: 1, gridX: 11, type: 'B', sub: '英', offsetX: 1.3, offsetZ: -1.3 },  // 右上盲點牆角
             { gridY: 9, gridX: 3, type: 'Q', sub: '數' },
-            { gridY: 1, gridX: 11, type: 'B', sub: '數' },
+            { gridY: 7, gridX: 5, type: 'B', sub: '數', offsetX: -1.3, offsetZ: 1.3 },  // 角落盲區
             { gridY: 5, gridX: 11, type: 'Q', sub: '社' },
-            { gridY: 9, gridX: 9, type: 'B', sub: '社' },
+            { gridY: 9, gridX: 9, type: 'B', sub: '社', offsetX: 1.3, offsetZ: 1.3 },   // 右下深處牆角
             { gridY: 7, gridX: 9, type: 'Q', sub: '自' },
             { gridY: 9, gridX: 11, type: 'E', sub: '出口' }
         ];
@@ -278,29 +280,31 @@ if (item.type === 'B') {
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x020617);
-        scene.fog = new THREE.FogExp2(0x020617, 0.05); // 迷霧遮擋視野
+        scene.fog = new THREE.FogExp2(0x020617, 0.06);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         container.appendChild(renderer.domElement);
 
-        scene.add(new THREE.AmbientLight(0xffffff, 0.3));
-        const flashlight = new THREE.SpotLight(0xffffff, 1, 25, Math.PI / 5);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+
+        // 手電筒
+        const flashlight = new THREE.SpotLight(0xffffff, 1.2, 22, Math.PI / 5, 0.5);
         camera.add(flashlight);
-        flashlight.position.set(0, 0, 1);
+        flashlight.position.set(0, 0, 0.1);
         flashlight.target = camera;
         scene.add(camera);
 
-        // 創建 3D 牆面與地板
-        const wallGeo = new THREE.BoxGeometry(UNIT, 3, UNIT);
-        const wallMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
+        // 3D 牆面與地板
+        const wallGeo = new THREE.BoxGeometry(UNIT, 3.5, UNIT);
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 });
         const floorGeo = new THREE.PlaneGeometry(mazeGrid[0].length * UNIT, mazeGrid.length * UNIT);
         const floorMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
 
         const floor = new THREE.Mesh(floorGeo, floorMat);
         floor.rotation.x = -Math.PI / 2;
-        floor.position.set((mazeGrid[0].length * UNIT)/2 - UNIT/2, -1.5, (mazeGrid.length * UNIT)/2 - UNIT/2);
+        floor.position.set((mazeGrid[0].length * UNIT)/2 - UNIT/2, -1.75, (mazeGrid.length * UNIT)/2 - UNIT/2);
         scene.add(floor);
 
         const walls = [];
@@ -315,23 +319,29 @@ if (item.type === 'B') {
             }
         }
 
-        // 創建 3D 互動物件
+        // 生成 3D 牆角寶箱與懸浮球體
         const interactableMeshes = [];
         interactablesData.forEach(item => {
             let mesh;
             if (item.type === 'Q') {
-                const geo = new THREE.SphereGeometry(0.6, 16, 16);
+                const geo = new THREE.SphereGeometry(0.5, 16, 16);
                 const mat = new THREE.MeshBasicMaterial({ color: subColorsHex[item.sub] });
                 mesh = new THREE.Mesh(geo, mat);
                 mesh.position.set(item.gridX * UNIT, 0, item.gridY * UNIT);
             } else if (item.type === 'B') {
-                const geo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
-                const mat = new THREE.MeshStandardMaterial({ color: subColorsHex[item.sub] });
+                // 精緻小寶箱，放置在地面牆角
+                const geo = new THREE.BoxGeometry(0.7, 0.6, 0.7);
+                const mat = new THREE.MeshStandardMaterial({ color: subColorsHex[item.sub], roughness: 0.3, metalness: 0.4 });
                 mesh = new THREE.Mesh(geo, mat);
-                mesh.position.set(item.gridX * UNIT, -0.8, item.gridY * UNIT);
+                
+                // 計算貼緊牆角之座標與旋轉角度
+                const offX = item.offsetX || 0;
+                const offZ = item.offsetZ || 0;
+                mesh.position.set(item.gridX * UNIT + offX, -1.45, item.gridY * UNIT + offZ);
+                mesh.rotation.y = Math.PI / 4; 
             } else if (item.type === 'E') {
-                const geo = new THREE.CylinderGeometry(1, 1, 3, 16);
-                const mat = new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.6 });
+                const geo = new THREE.CylinderGeometry(1, 1, 3.5, 16);
+                const mat = new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.5 });
                 mesh = new THREE.Mesh(geo, mat);
                 mesh.position.set(item.gridX * UNIT, 0, item.gridY * UNIT);
             }
@@ -340,12 +350,46 @@ if (item.type === 'B') {
             interactableMeshes.push(mesh);
         });
 
-        camera.position.set(1 * UNIT, 0, 1 * UNIT); // 初始座標
+        camera.position.set(1 * UNIT, 0, 1 * UNIT);
 
-        // --- 4. 角色操控 ---
+        // --- 4. 3D FPS 滑鼠視角控制 (Pointer Lock) ---
+        const instructions = document.getElementById('instructions');
+        let isLocked = false;
+
+        instructions.addEventListener('click', () => {
+            document.body.requestPointerLock();
+        });
+
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement === document.body) {
+                isLocked = true;
+                instructions.style.display = 'none';
+            } else {
+                isLocked = false;
+                if (!gameState.isGameOver) instructions.style.display = 'flex';
+            }
+        });
+
+        let pitch = 0, yaw = 0; // 上下俯仰與左右旋轉
+        document.addEventListener('mousemove', (e) => {
+            if (!isLocked || gameState.isGameOver || document.querySelector('.overlay.show')) return;
+
+            const sensitivity = 0.002;
+            yaw -= e.movementX * sensitivity;
+            pitch -= e.movementY * sensitivity;
+
+            // 限制俯仰角度，避免翻轉
+            pitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, pitch));
+
+            // 更新相機 Euler 角度
+            const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+            euler.x = pitch;
+            euler.y = yaw;
+            camera.quaternion.setFromEuler(euler);
+        });
+
+        // 鍵盤移動
         const keys = {};
-        let yaw = 0;
-
         document.addEventListener('keydown', (e) => {
             keys[e.key.toLowerCase()] = true;
             if (e.key.toLowerCase() === 'e' && gameState.nearInteractable) {
@@ -355,25 +399,27 @@ if (item.type === 'B') {
         document.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
         function handleMovement() {
-            if (gameState.isGameOver || document.querySelector('.overlay.show')) return;
+            if (!isLocked || gameState.isGameOver || document.querySelector('.overlay.show')) return;
 
-            const moveSpeed = 0.08;
-            const rotateSpeed = 0.03;
-
-            if (keys['a'] || keys['arrowleft']) yaw += rotateSpeed;
-            if (keys['d'] || keys['arrowright']) yaw -= rotateSpeed;
-            camera.rotation.y = yaw;
-
+            const moveSpeed = 0.09;
             const dir = new THREE.Vector3();
-            camera.getWorldDirection(dir);
-            dir.y = 0;
-            dir.normalize();
+            
+            // 取得前端視野水平方向
+            const frontDir = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+            const sideDir = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
 
-            let newPos = camera.position.clone();
-            if (keys['w'] || keys['arrowup']) newPos.addScaledVector(dir, moveSpeed);
-            if (keys['s'] || keys['arrowdown']) newPos.addScaledVector(dir, -moveSpeed);
+            let moveVector = new THREE.Vector3();
 
-            // 碰撞檢測
+            if (keys['w'] || keys['arrowup']) moveVector.add(frontDir);
+            if (keys['s'] || keys['arrowdown']) moveVector.sub(frontDir);
+            if (keys['a'] || keys['arrowleft']) moveVector.sub(sideDir);
+            if (keys['d'] || keys['arrowright']) moveVector.add(sideDir);
+
+            moveVector.normalize().multiplyScalar(moveSpeed);
+
+            let newPos = camera.position.clone().add(moveVector);
+
+            // 碰撞牆壁檢測
             let collide = false;
             for (let wall of walls) {
                 const box = new THREE.Box3().setFromObject(wall);
@@ -385,14 +431,17 @@ if (item.type === 'B') {
             checkProximity();
         }
 
+        // 靠近距離與抬頭低頭視線檢測
         function checkProximity() {
             let found = null;
             interactableMeshes.forEach(mesh => {
                 const dist = camera.position.distanceTo(mesh.position);
-                if (dist < 2.0) found = mesh;
+                // 距離小於 2.2 即可觸發
+                if (dist < 2.2) found = mesh;
+                
                 if (mesh.userData.type === 'Q') {
                     mesh.rotation.y += 0.02;
-                    mesh.position.y = Math.sin(Date.now() * 0.003) * 0.2;
+                    mesh.position.y = Math.sin(Date.now() * 0.003) * 0.15;
                 }
             });
 
@@ -401,8 +450,8 @@ if (item.type === 'B') {
                 gameState.nearInteractable = found;
                 const d = found.userData;
                 if (d.type === 'Q') promptEl.textContent = `按 [ E ] 挑戰《${d.sub}語文》題目`;
-                else if (d.type === 'B') promptEl.textContent = `按 [ E ] 開啟《${d.sub}》寶箱`;
-                else if (d.type === 'E') promptEl.textContent = `按 [ E ] 進入迷宮出口`;
+                else if (d.type === 'B') promptEl.textContent = `按 [ E ] 開啟牆角《${d.sub}》寶箱`;
+                else if (d.type === 'E') promptEl.textContent = `按 [ E ] 進入出口閘門`;
                 promptEl.style.display = 'block';
             } else {
                 gameState.nearInteractable = null;
@@ -410,9 +459,11 @@ if (item.type === 'B') {
             }
         }
 
-        // --- 5. 互動功能 ---
+        // --- 5. 答題與開箱 ---
         function triggerInteraction(mesh) {
+            document.exitPointerLock(); // 暫停滑鼠鎖定以進行介面操作
             const data = mesh.userData;
+
             if (data.type === 'Q') {
                 const q = quizBank[data.sub][0];
                 document.getElementById('quiz-title').textContent = `${data.sub}語文挑戰`;
@@ -431,9 +482,9 @@ if (item.type === 'B') {
                             gameState.keysLit[data.sub] = true;
                             gameState.keyCounts[data.sub]++;
                             updateHUD();
-                            showMsg('答對了！', `獲得【${data.sub}鑰匙】x1 (已點亮)！`);
+                            showMsg('答對了！', `恭喜取得【${data.sub}鑰匙】！<br>現在可以去角落找尋對應的寶箱了。`);
                         } else {
-                            showMsg('答錯了...', '請繼續在迷宮中尋找答案！');
+                            showMsg('答錯了...', '沒關係，請在迷宮中繼續尋找試試看！');
                         }
                     };
                     optsEl.appendChild(btn);
@@ -448,9 +499,9 @@ if (item.type === 'B') {
                     scene.remove(mesh);
                     interactablesData.splice(interactablesData.indexOf(data), 1);
                     interactableMeshes.splice(interactableMeshes.indexOf(mesh), 1);
-                    showMsg(`開啟${data.sub}寶箱！`, `📜 <b>情報卷軸：</b><br>獲得提示：自然科題目答案為 C！`);
+                    showMsg(`開啟牆角寶箱！`, `📜 <b>秘寶卷軸：</b><br>獲得過關情報：自然科答案為 C！`);
                 } else {
-                    showMsg('無法開啟', `你需要 1 把【${data.sub}鑰匙】才能開啟此寶箱！`);
+                    showMsg('無法開啟', `牆角寶箱已被鎖住！你需要 1 把【${data.sub}鑰匙】！`);
                 }
 
             } else if (data.type === 'E') {
@@ -460,7 +511,7 @@ if (item.type === 'B') {
                     document.getElementById('cert-boxes').textContent = gameState.boxesOpened;
                     showOverlay('cert-popup');
                 } else {
-                    showMsg('閘門鎖住中', '你尚未集齊 5 科鑰匙，無法走出去！');
+                    showMsg('閘門鎖住中', '你尚未集齊 5 科鑰匙，無法走出出口！');
                 }
             }
         }
@@ -481,80 +532,72 @@ if (item.type === 'B') {
             showOverlay('msg-popup');
         }
 
-        // --- 6. 右上角 2D 實體電子地圖繪製核心 ---
+        // --- 6. 右上角 2D 實體雷達地圖 ---
         const minimapCanvas = document.getElementById('minimap-canvas');
         const ctx = minimapCanvas.getContext('2d');
 
         function render2DMinimap() {
-            ctx.clearRect(0, 0, 150, 150);
+            ctx.clearRect(0, 0, 140, 140);
             
             const cols = mazeGrid[0].length;
             const rows = mazeGrid.length;
-            const cellW = 150 / cols;
-            const cellH = 150 / rows;
+            const cellW = 140 / cols;
+            const cellH = 140 / rows;
 
-            // 1. 繪製 2D 迷宮牆壁與通道
+            // 1. 牆壁與路
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
-                    if (mazeGrid[r][c] === 1) {
-                        ctx.fillStyle = '#334155'; // 牆壁
-                        ctx.fillRect(c * cellW, r * cellH, cellW, cellH);
-                    } else {
-                        ctx.fillStyle = '#0f172a'; // 通道
-                        ctx.fillRect(c * cellW, r * cellH, cellW, cellH);
-                    }
+                    ctx.fillStyle = (mazeGrid[r][c] === 1) ? '#334155' : '#0f172a';
+                    ctx.fillRect(c * cellW, r * cellH, cellW, cellH);
                 }
             }
 
-            // 2. 繪製 2D 題目標示 (★) 與 寶箱 (🎁)
+            // 2. 題目(★) 與 牆角寶箱(🎁) 標示
             interactablesData.forEach(item => {
-                const cx = item.gridX * cellW + cellW / 2;
-                const cy = item.gridY * cellH + cellH / 2;
+                const cx = (item.gridX + (item.offsetX ? item.offsetX/UNIT : 0)) * cellW + cellW / 2;
+                const cy = (item.gridY + (item.offsetZ ? item.offsetZ/UNIT : 0)) * cellH + cellH / 2;
 
                 if (item.type === 'Q') {
                     ctx.fillStyle = subColorsCss[item.sub];
-                    ctx.font = 'bold 10px sans-serif';
+                    ctx.font = 'bold 9px sans-serif';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText('★', cx, cy);
                 } else if (item.type === 'B') {
-                    ctx.fillStyle = '#e2e8f0';
-                    ctx.font = '10px sans-serif';
+                    ctx.fillStyle = '#f8fafc';
+                    ctx.font = '9px sans-serif';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText('🎁', cx, cy);
                 } else if (item.type === 'E') {
                     ctx.fillStyle = '#ffd700';
-                    ctx.fillRect(item.gridX * cellW + 2, item.gridY * cellH + 2, cellW - 4, cellH - 4);
+                    ctx.fillRect(item.gridX * cellW + 1, item.gridY * cellH + 1, cellW - 2, cellH - 2);
                 }
             });
 
-            // 3. 繪製 2D 玩家當前即時位置與方向
-            const playerGridX = camera.position.x / UNIT;
-            const playerGridY = camera.position.z / UNIT;
-            const px = playerGridX * cellW;
-            const py = playerGridY * cellH;
+            // 3. 玩家即時座標與視線方向
+            const px = (camera.position.x / UNIT) * cellW;
+            const py = (camera.position.z / UNIT) * cellH;
 
-            // 玩家圓點
             ctx.fillStyle = '#38bdf8';
             ctx.beginPath();
-            ctx.arc(px, py, 4, 0, Math.PI * 2);
+            ctx.arc(px, py, 3.5, 0, Math.PI * 2);
             ctx.fill();
 
-            // 視角方向指標
+            // 視角朝向線
             ctx.strokeStyle = '#67e8f9';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 1.5;
             ctx.beginPath();
             ctx.moveTo(px, py);
-            ctx.lineTo(px - Math.sin(yaw) * 10, py - Math.cos(yaw) * 10);
+            ctx.lineTo(px - Math.sin(yaw) * 8, py - Math.cos(yaw) * 8);
             ctx.stroke();
         }
 
-        // --- 7. 主遊戲循環 ---
+        // --- 7. 主遊戲渲染 Loop ---
         function animate() {
             requestAnimationFrame(animate);
             handleMovement();
-            render2DMinimap(); // 更新右上角 2D 地圖
+            render2DMinimap();
             renderer.render(scene, camera);
         }
         animate();
