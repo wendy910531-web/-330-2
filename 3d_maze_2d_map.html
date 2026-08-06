@@ -231,7 +231,19 @@
             isGameOver: false,
             nearInteractable: null
         };
-
+// 建立 3D 牆角寶箱
+if (item.type === 'B') {
+    const geo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+    const mat = new THREE.MeshStandardMaterial({ color: subColorsHex[item.sub], roughness: 0.3 });
+    mesh = new THREE.Mesh(geo, mat);
+    
+    // 將寶箱從格子中心 (0, 0) 推向牆角偏移量 (-1.2, -1.2)，使其緊貼牆壁
+    const cornerOffsetX = -1.2; 
+    const cornerOffsetZ = -1.2;
+    
+    mesh.position.set(item.gridX * UNIT + cornerOffsetX, -1.1, item.gridY * UNIT + cornerOffsetZ);
+    mesh.rotation.y = Math.PI / 4; // 傾斜 45 度擺放，更貼合直角牆面
+}
         // --- 2. 2D 迷宮矩陣數據 (1:牆, 0:通道) ---
         const UNIT = 4; // 3D 空間網格尺度
         const mazeGrid = [
