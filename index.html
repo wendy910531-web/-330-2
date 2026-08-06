@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>歡樂園遊會 3D 迷宮</title>
+    <title>歡樂園遊會 3D 迷宮 (不頭暈版)</title>
     <style>
         * { box-sizing: border-box; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
         html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #87ceeb; font-family: sans-serif; }
@@ -17,7 +17,7 @@
             pointer-events: none;
         }
 
-        /* 右上角極簡小地圖 */
+        /* 右上角小地圖 */
         #minimap-card {
             position: absolute; top: 8px; right: 8px; z-index: 10;
             width: 80px; height: 80px; background: rgba(255, 255, 255, 0.85);
@@ -25,28 +25,15 @@
         }
         #minimap-canvas { width: 100%; height: 100%; }
 
-        /* 超小型虛擬搖桿（角落不佔空間） */
-        .joystick-zone {
-            position: absolute; bottom: 15px; width: 80px; height: 80px; z-index: 10;
-            background: rgba(255, 255, 255, 0.3); border: 2px solid rgba(255, 255, 255, 0.6);
-            border-radius: 50%; touch-action: none; display: flex; justify-content: center; align-items: center;
-        }
-        #move-joy { left: 15px; }
-        #look-joy { right: 15px; }
-        .stick {
-            width: 36px; height: 36px; background: #ff4757;
-            border: 2px solid #fff; border-radius: 50%; position: absolute; pointer-events: none;
-        }
-
-        /* 下方緊湊集章卡 */
+        /* 下方集章卡 */
         #status-bar {
-            position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 10;
+            position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 10;
             display: flex; gap: 6px; background: rgba(255, 255, 255, 0.9); padding: 4px 10px;
             border-radius: 20px; border: 2px solid #ffbe76; pointer-events: none;
         }
         .key-slot { display: flex; flex-direction: column; align-items: center; opacity: 0.3; }
         .key-slot.active { opacity: 1; }
-        .key-icon { width: 22px; height: 22px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; color: #fff; font-size: 11px; }
+        .key-icon { width: 20px; height: 20px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; color: #fff; font-size: 11px; }
         .key-count { color: #333; font-size: 9px; font-weight: bold; }
 
         .c-國 { background-color: #ff4757; }
@@ -54,6 +41,21 @@
         .c-數 { background-color: #2ed573; }
         .c-社 { background-color: #1e90ff; }
         .c-自 { background-color: #9b59b6; }
+
+        /* 手機按鍵控制區 (簡化不占空間) */
+        #mobile-controls {
+            position: absolute; bottom: 15px; left: 0; width: 100%; z-index: 10;
+            display: flex; justify-content: space-between; padding: 0 20px;
+            pointer-events: none;
+        }
+        .btn-group { display: flex; gap: 10px; pointer-events: auto; }
+        .ctrl-btn {
+            width: 55px; height: 55px; background: rgba(255, 255, 255, 0.85);
+            border: 2px solid #ff4757; border-radius: 50%; font-size: 20px; font-weight: bold;
+            color: #2f3542; display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); touch-action: manipulation;
+        }
+        .ctrl-btn:active { background: #ff7f50; color: #fff; }
 
         /* 彈窗 */
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
@@ -73,15 +75,24 @@
         <canvas id="minimap-canvas" width="80" height="80"></canvas>
     </div>
 
-    <div id="move-joy" class="joystick-zone"><div class="stick" id="move-stick"></div></div>
-    <div id="look-joy" class="joystick-zone"><div class="stick" id="look-stick" style="background: #1e90ff;"></div></div>
-
     <div id="status-bar">
         <div class="key-slot" id="hud-國"><div class="key-icon c-國">國</div><div class="key-count">x0</div></div>
         <div class="key-slot" id="hud-英"><div class="key-icon c-英">英</div><div class="key-count">x0</div></div>
         <div class="key-slot" id="hud-數"><div class="key-icon c-數">數</div><div class="key-count">x0</div></div>
         <div class="key-slot" id="hud-社"><div class="key-icon c-社">社</div><div class="key-count">x0</div></div>
         <div class="key-slot" id="hud-自"><div class="key-icon c-自">自</div><div class="key-count">x0</div></div>
+    </div>
+
+    <!-- 手機按鈕 (前/後/左轉/右轉) -->
+    <div id="mobile-controls">
+        <div class="btn-group">
+            <div class="ctrl-btn" id="btn-left">◀</div>
+            <div class="ctrl-btn" id="btn-right">▶</div>
+        </div>
+        <div class="btn-group">
+            <div class="ctrl-btn" id="btn-backward">▼</div>
+            <div class="ctrl-btn" id="btn-forward">▲</div>
+        </div>
     </div>
 
     <div class="overlay" id="quiz-popup">
@@ -111,7 +122,6 @@
     <script>
         const subList = ['國', '英', '數', '社', '自'];
         const subColorsHex = { '國': 0xff4757, '英': 0xffa502, '數': 0x2ed573, '社': 0x1e90ff, '自': 0x9b59b6 };
-        const subColorsCss = { '國': '#ff4757', '英': '#ffa502', '數': '#2ed573', '社': '#1e90ff', '自': '#9b59b6' };
 
         const quizBank = {
             '國': [{ q: "「沉魚落雁」常用來形容女子的什麼？", o: ["A. 武藝超群", "B. 容貌極美", "C. 歌聲動聽"], a: 1 }],
@@ -128,7 +138,7 @@
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87ceeb);
 
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.getElementById('canvas-container').appendChild(renderer.domElement);
@@ -138,16 +148,35 @@
         sun.position.set(10, 20, 10);
         scene.add(sun);
 
+        // 玩家角色與視角設置
+        const playerGroup = new THREE.Group();
+        scene.add(playerGroup);
+
+        // 建立可愛小玩家代表（小氣球人）
+        const playerBody = new THREE.Mesh(
+            new THREE.SphereGeometry(0.5, 16, 16),
+            new THREE.MeshStandardMaterial({ color: 0xff4757 })
+        );
+        playerBody.position.y = 0.5;
+        playerGroup.add(playerBody);
+
+        // 相機固定在玩家後上方，防暈眩
+        camera.position.set(0, 2.5, 4.5);
+        camera.lookAt(0, 0.5, -2);
+        playerGroup.add(camera);
+
+        playerGroup.position.set(36, 0, 0);
+        playerGroup.rotation.y = -Math.PI / 2; // 起始朝內
+
         // 草地
         const floor = new THREE.Mesh(
             new THREE.CircleGeometry(42, 32),
             new THREE.MeshStandardMaterial({ color: 0x7bed9f })
         );
         floor.rotation.x = -Math.PI / 2;
-        floor.position.y = -1.5;
         scene.add(floor);
 
-        // 圓形牆壁
+        // 牆壁
         const wallRadius = [10, 20, 30];
         const walls = [];
         const wallMatA = new THREE.MeshStandardMaterial({ color: 0xff6b81 });
@@ -174,7 +203,7 @@
             }
         });
 
-        // 互動對象
+        // 互動點
         const interactables = [];
         const quizAngles = [0.5, 2.2, 3.8, 4.8, 5.5];
         subList.forEach((sub, i) => {
@@ -184,7 +213,7 @@
                 new THREE.BoxGeometry(1, 1.2, 0.2),
                 new THREE.MeshBasicMaterial({ color: subColorsHex[sub] })
             );
-            mesh.position.set(Math.cos(ang) * r, 0, Math.sin(ang) * r);
+            mesh.position.set(Math.cos(ang) * r, 0.5, Math.sin(ang) * r);
             mesh.userData = { type: 'Q', sub: sub };
             scene.add(mesh);
             interactables.push(mesh);
@@ -198,7 +227,7 @@
                 new THREE.BoxGeometry(0.8, 0.8, 0.8),
                 new THREE.MeshStandardMaterial({ color: subColorsHex[sub] })
             );
-            mesh.position.set(Math.cos(ang) * r, -1.1, Math.sin(ang) * r);
+            mesh.position.set(Math.cos(ang) * r, 0.4, Math.sin(ang) * r);
             mesh.userData = { type: 'B', sub: sub };
             scene.add(mesh);
             interactables.push(mesh);
@@ -213,79 +242,68 @@
         scene.add(portal);
         interactables.push(portal);
 
-        camera.position.set(36, 0, 0);
+        // 跨平台操作狀態 (電腦 + 手機)
+        const inputs = { forward: false, backward: false, left: false, right: false };
 
-        // 搖桿控制
-        let moveInput = { x: 0, y: 0 }, lookInput = { x: 0, y: 0 };
-        let yaw = -Math.PI / 2, pitch = 0;
+        // 1. 電腦鍵盤監聽
+        window.addEventListener('keydown', e => {
+            const k = e.key.toLowerCase();
+            if (k === 'w' || k === 'arrowup') inputs.forward = true;
+            if (k === 's' || k === 'arrowdown') inputs.backward = true;
+            if (k === 'a' || k === 'arrowleft') inputs.left = true;
+            if (k === 'd' || k === 'arrowright') inputs.right = true;
+        });
 
-        function setupJoystick(zoneId, stickId, callback) {
-            const zone = document.getElementById(zoneId);
-            const stick = document.getElementById(stickId);
-            let touchId = null, startX = 0, startY = 0;
+        window.addEventListener('keyup', e => {
+            const k = e.key.toLowerCase();
+            if (k === 'w' || k === 'arrowup') inputs.forward = false;
+            if (k === 's' || k === 'arrowdown') inputs.backward = false;
+            if (k === 'a' || k === 'arrowleft') inputs.left = false;
+            if (k === 'd' || k === 'arrowright') inputs.right = false;
+        });
 
-            zone.addEventListener('touchstart', (e) => {
-                if (touchId !== null) return;
-                const t = e.changedTouches[0];
-                touchId = t.identifier; startX = t.clientX; startY = t.clientY;
-            });
-
-            window.addEventListener('touchmove', (e) => {
-                for (let t of e.changedTouches) {
-                    if (t.identifier === touchId) {
-                        const dx = t.clientX - startX, dy = t.clientY - startY;
-                        const dist = Math.min(Math.hypot(dx, dy), 30);
-                        const angle = Math.atan2(dy, dx);
-                        const mx = Math.cos(angle) * dist, my = Math.sin(angle) * dist;
-                        stick.style.transform = `translate(${mx}px, ${my}px)`;
-                        callback(mx / 30, my / 30);
-                    }
-                }
-            });
-
-            const endHandler = (e) => {
-                for (let t of e.changedTouches) {
-                    if (t.identifier === touchId) {
-                        touchId = null; stick.style.transform = `translate(0px, 0px)`;
-                        callback(0, 0);
-                    }
-                }
-            };
-            window.addEventListener('touchend', endHandler);
-            window.addEventListener('touchcancel', endHandler);
+        // 2. 手機觸控監聽
+        function bindBtn(id, key) {
+            const btn = document.getElementById(id);
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); inputs[key] = true; });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); inputs[key] = false; });
+            btn.addEventListener('mousedown', () => inputs[key] = true);
+            btn.addEventListener('mouseup', () => inputs[key] = false);
         }
-
-        setupJoystick('move-joy', 'move-stick', (x, y) => { moveInput.x = x; moveInput.y = y; });
-        setupJoystick('look-joy', 'look-stick', (x, y) => { lookInput.x = x; lookInput.y = y; });
+        bindBtn('btn-forward', 'forward');
+        bindBtn('btn-backward', 'backward');
+        bindBtn('btn-left', 'left');
+        bindBtn('btn-right', 'right');
 
         function updatePlayer() {
             if (document.querySelector('.overlay.show')) return;
 
-            yaw -= lookInput.x * 0.04;
-            pitch -= lookInput.y * 0.03;
-            pitch = Math.max(-Math.PI/3, Math.min(Math.PI/3, pitch));
-            camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+            // 轉向
+            if (inputs.left) playerGroup.rotation.y += 0.04;
+            if (inputs.right) playerGroup.rotation.y -= 0.04;
 
-            const frontDir = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-            const sideDir = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+            // 直線前後移動
+            let moveDist = 0;
+            if (inputs.forward) moveDist -= 0.12;
+            if (inputs.backward) moveDist += 0.08;
 
-            const moveVec = new THREE.Vector3()
-                .addScaledVector(frontDir, -moveInput.y)
-                .addScaledVector(sideDir, moveInput.x)
-                .normalize().multiplyScalar(0.12);
+            if (moveDist !== 0) {
+                const moveVec = new THREE.Vector3(0, 0, moveDist).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerGroup.rotation.y);
+                let newPos = playerGroup.position.clone().add(moveVec);
 
-            let newPos = camera.position.clone().add(moveVec);
-
-            let collide = false;
-            for (let wall of walls) {
-                if (new THREE.Box3().setFromObject(wall).intersectsBox(new THREE.Box3().setFromCenterAndSize(newPos, new THREE.Vector3(0.8, 1.8, 0.8)))) {
-                    collide = true; break;
+                // 牆壁碰撞測試
+                let collide = false;
+                for (let wall of walls) {
+                    if (new THREE.Box3().setFromObject(wall).intersectsBox(new THREE.Box3().setFromCenterAndSize(newPos, new THREE.Vector3(0.8, 1.8, 0.8)))) {
+                        collide = true; break;
+                    }
                 }
+                if (!collide) playerGroup.position.copy(newPos);
             }
-            if (!collide) camera.position.copy(newPos);
 
+            // 自動觸發關卡
             interactables.forEach(obj => {
-                if (camera.position.distanceTo(obj.position) < 1.3 && !gameState.nearCooldown) {
+                if (playerGroup.position.distanceTo(obj.position) < 1.4 && !gameState.nearCooldown) {
                     triggerInteraction(obj);
                 }
             });
@@ -366,8 +384,8 @@
                 mctx.beginPath(); mctx.arc(cx, cy, r * scale, 0, Math.PI * 2); mctx.stroke();
             });
 
-            const px = cx + camera.position.x * scale;
-            const py = cy + camera.position.z * scale;
+            const px = cx + playerGroup.position.x * scale;
+            const py = cy + playerGroup.position.z * scale;
             mctx.fillStyle = '#ff4757';
             mctx.beginPath(); mctx.arc(px, py, 3, 0, Math.PI*2); mctx.fill();
         }
