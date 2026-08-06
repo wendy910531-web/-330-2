@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>國中全科迷宮冒險 RPG</title>
+    <style>
+        :root {
+            --color-國: #ff4d4d; /* 紅 */
+            --color-英: #ff944d; /* 橙 */
+            --color-數: #ffdb4d; /* 黃 */
+            --color-社: #4dff4d; /* 綠 */
+            --color-自: #4dabff; /* 藍 */
+            --bg-color: #222;
+            --wall-color: #444;
+            --path-color: #eee;
+            --text-color: #fff;
+        }
+
+        body {
+            font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden; /* 防止手機捲動 */
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* 遊戲主容器 */
+        #game-container {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 迷宮視窗 (模擬實體走動視角，這裡用 2D 網格代替) */
+        #maze-view {
+            width: 90vmin;
+            height: 90vmin;
+            background-color: var(--wall-color);
+            display: grid;
+            border: 2px solid #000;
+            position: relative;
+        }
+
+        .cell {
+            width: 100%;
+            height: 100%;
+        }
+        .wall { background-color: var(--wall-color); }
+        .path { background-color: var(--path-color); }
+        .player { background-color: #007bff; border-radius: 50%; scale: 0.8; position: relative; z-index: 10; }
+        .exit { background-color: var(--color-社); } /* 出口用綠色 */
+
+        /* 題目點 & 寶箱點 */
+        .poi { font-size: 4vmin; display: flex; justify-content: center; align-items: center; position: relative; z-index: 5; }
+        .poi-quiz::after { content: '★'; color: gold; }
+        .poi-box::after { content: '🎁'; }
+
+        /* 右上角小地圖 */
+        #minimap {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 100px;
+            height: 100px;
+            background-color: rgba(0,0,0,0.7);
+            border: 2px solid var(--text-color);
+            z-index: 100;
+            display: grid;
+        }
+        .minio-cell { width: 100%; height: 100%; }
+        .mini-player { background-color: #007bff; border-radius: 50%; }
+        .mini-quiz { background-color: gold; }
+        .mini-box { background-color: brown; }
+        .mini-exit { background-color: var(--color-社); }
+
+        /* 下方鑰匙狀態欄 */
+        #status-bar {
+            height: 80px;
+            background-color: #111;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 0 10px;
+            border-top: 2px solid #444;
+        }
+
+        .key-slot {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            opacity: 0.3; /* 預設灰色 */
+            transition: opacity 0.3s;
+        }
+        .key-slot.active { opacity: 1; } /* 點亮 */
+
+        .key-icon {
+            font-size: 24px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 2px solid transparent;
+        }
+        .key-slot.active .key-icon { border-color: var(--text-color); }
+
+        .key-name { font-size: 12px; margin-top: 2px; }
+        .key-count { font-size: 10px; color: #aaa; }
+
+        /* 科目專屬顏色 */
+        .subject-國 { background-color: var(--color-國); color: #000; }
+        .subject-英 { background-color: var(--color-英); color: #000; }
+        .subject-數 { background-color: var(--color-數); color: #000; }
+        .subject-社 { background-color: var(--color-社); color: #000; }
+        .subject-自 { background-color: var(--color-自); color: #000; }
+
+        /* 移動控制按鈕 (手機模擬用) */
+        #controls {
+            position: absolute;
+            bottom: 100px;
+            right: 20px;
+            display: grid;
+            grid-template-columns: repeat(3, 50px);
+            grid-template-rows: repeat(2, 50px);
+            gap: 5px;
+            z-index: 90;
+        }
+        .control-btn {
+            background-color: rgba(255,255,255,0.2);
+            color: var(--text-color);
+            border: 1px solid var(--text-color);
+            border-radius: 5px;
+            font-size: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 彈出視窗 (題目/寶箱/證書) */
+        .overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .overlay.show { display: flex; }
+
+        .popup-content {
+            background-color: #333;
+            padding: 20px;
+            border-radius: 10px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            border: 2px solid var(--text-color);
+        }
+
+        /* 題目樣式 */
+        .quiz-subject { font-weight: bold; font-size: 1.2em; margin-bottom: 10px; padding: 5px; border-radius: 5px; }
+        .quiz-question { margin-bottom: 20px; text-align: left; line-height: 1.5; }
+        .quiz-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .option-btn {
+            background-color: #555;
+            color: var(--text-color);
+            border: 1px solid #777;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: left;
+        }
+
+        /* 證書樣式 */
+        #certificate-popup .popup-content {
+            background: linear-gradient(135deg, #2c3e50 0%, #000000 100%);
+            border: 4px solid gold;
+        }
+        .cert-title { color: gold; font-size: 1.5em; font-weight: bold; margin-bottom: 15px; }
+        .cert-name { font-size: 1.2em; margin-bottom: 10px; text-decoration: underline; }
+        .cert-stats { text-align: left; font-size: 0.9em; color: #ccc; margin: 15px 0; line-height: 1.6;}
+        .cert-footer { font-size: 0.8em; color: #888; margin-top: 20px; }
+
+    </style>
+</head>
+<body>
+
+    <!-- 遊戲主體 -->
+    <div id="game-container">
+        <!-- 迷宮視窗 -->
+        <div id="maze-view"></div>
+
+        <!-- 小地圖 -->
+        <div id="minimap"></div>
+
+        <!-- 手機移動控制 (網頁模擬用) -->
+        <div id="controls">
+            <div style="grid-column: 2;" class="control-btn" onclick="movePlayer(0, -1)">↑</div>
+            <div class="control-btn" onclick="movePlayer(-1, 0)">←</div>
+            <div class="control-btn" onclick="movePlayer(0, 1)">↓</div>
+            <div class="control-btn" onclick="movePlayer(1, 0)">→</div>
+        </div>
+    </div>
+
+    <!-- 下方狀態欄 (鑰匙) -->
+    <div id="status-bar">
+        <div class="key-slot" id="key-國">
+            <div class="key-icon subject-國">🔑</div>
+            <div class="key-name">國語</div>
+            <div class="key-count">x0</div>
+        </div>
+        <div class="key-slot" id="key-英">
+            <div class="key-icon subject-英">🔑</div>
+            <div class="key-name">英語</div>
+            <div class="key-count">x0</div>
+        </div>
+        <div class="key-slot" id="key-數">
+            <div class="key-icon subject-數">🔑</div>
+            <div class="key-name">數學</div>
+            <div class="key-count">x0</div>
+        </div>
+        <div class="key-slot" id="key-社">
+            <div class="key-icon subject-社">🔑</div>
+            <div class="key-name">社會</div>
+            <div class="key-count">x0</div>
+        </div>
+        <div class="key-slot" id="key-自">
+            <div class="key-icon subject-自">🔑</div>
+            <div class="key-name">自然</div>
+            <div class="key-count">x0</div>
+        </div>
+    </div>
+
+    <!-- 彈出視窗：題目 -->
+    <div class="overlay" id="quiz-popup">
+        <div class="popup-content">
+            <div id="quiz-subject-label" class="quiz-subject">科目</div>
+            <div id="quiz-question-text" class="quiz-question">題目載入中...</div>
+            <div id="quiz-options-container" class="quiz-options">
+                <!-- 選項會動態插入此處 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 彈出視窗：寶箱/訊息 -->
+    <div class="overlay" id="msg-popup">
+        <div class="popup-content">
+            <div style="font-size: 3em; margin-bottom: 10px;">📜</div>
+            <div id="msg-text">獲得情報卷軸...</div>
+            <button style="margin-top:20px; padding: 10px 20px;" onclick="closePopup('msg-popup')">確認</button>
+        </div>
+    </div>
+
+    <!-- 彈出視窗：通關證書 -->
+    <div class="overlay" id="certificate-popup">
+        <div class="popup-content">
+            <div class="cert-title">全能冒險家認證書</div>
+            <div class="cert-name">冒險者：<span id="player-name-cert">同學</span></div>
+            <div>恭喜完成全科迷宮探索挑戰！</div>
+            <div class="cert-stats">
+                通關時間：<span id="cert-time">0</span> 秒<br>
+                解開題目數：5 題<br>
+                開啟寶箱數：<span id="cert-boxes">0</span> 個
+            </div>
+            <div>您已獲得「國英數社自」五大領域的認證，正式成為綠色生活冒險大師！</div>
+            <div class="cert-footer">統一認證編號：MSG-20231027-<span id="cert-id"></span></div>
+            <button style="margin-top:20px; padding: 10px 20px; background:gold; color:#000; border:none; font-weight:bold;" onclick="location.reload()">重新挑戰</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. 遊戲資料與設定 ---
+
+        const subjects = ['國', '英', '數', '社', '自'];
+        const subColors = { '國': 'var(--color-國)', '英': 'var(--color-英)', '數': 'var(--color-數)', '社': 'var(--color-社)', '自': 'var(--color-自)' };
+
+        // 題目庫 (國中隨機範例)
+        const quizBank = {
+            '國': [
+                { q: "「沉魚落雁」是形容女子：", o: ["A. 很有才華", "B. 容貌美麗", "C. 武術高強", "D. 聲音好聽"], a: 1 },
+                { q: "下列各組同音字，何者字形正確？", o: ["A. 鞠躬盡創", "B. 迫不急待", "C. 氣勢磅礡", "D. 莫名其妙"], a: 2 }
+            ],
+            '英': [
+                { q: "Choose the correct verb form: My brother _______ to school every day.", o: ["A. go", "B. goes", "C. going", "D. went"], a: 1 },
+                { q: "What's the past tense of 'buy'?", o: ["A. bought", "B. buyed", "C. buys", "D. buying"], a: 0 }
+            ],
+            '數': [
+                { q: "解方程式 2x + 5 = 13，x = ?", o: ["A. 3", "B. 4", "C. 5", "D. 8"], a: 1 },
+                { q: "直角三角形兩直角邊為3、4，則斜邊為：", o: ["A. 5", "B. 6", "C. 7", "D. 8"], a: 0 }
+            ],
+            '社': [
+                { q: "台灣島位於哪兩個板塊的交界處？", o: ["A. 太平洋、歐亞", "B. 菲律賓海、歐亞", "C. 菲律賓海、太平洋", "D. 歐亞、北美洲"], a: 1 },
+                { q: "台灣歷史上，「大航海時代」主要與哪國人有關？", o: ["A. 日本人", "B. 美國人", "C. 荷蘭人、西班牙人", "D. 韓國人"], a: 2 }
+            ],
+            '自': [
+                { q: "人體內主要的呼吸器官是：", o: ["A. 心臟", "B. 肝臟", "C. 肺臟", "D. 腎臟"], a: 2 },
+                { q: "下列何者屬於「物理變化」？", o: ["A. 鐵生鏽", "B. 紙燃燒", "C. 水結冰", "D. 食物腐敗"], a: 2 }
+            ]
+        };
+
+        // --- 2. 遊戲狀態 variables ---
+        let playerPos = { x: 1, y: 1 };
+        const exitPos = { x: 13, y: 13 }; // 出口位置
+        let gameState = {
+            keysLit: { '國': false, '英': false, '數': false, '社': false, '自': false },
+            keyCounts: { '國': 0, '英': 0, '數': 0, '社': 0, '自': 0 },
+            startTime: Date.now(),
+            boxesOpened: 0,
+            isGameOver: false,
+            activeQuiz: null, // 當前正在作答的題目資訊
+            poiVisited: new Set() // 記錄已訪問過的題目點 coordinates "x,y"
+        };
+
+        // --- 3. 迷宮與地圖生成 (15x15 單純範例) ---
+        // 0: 牆, 1: 通道, Q: 題目點(隨機科), B: 寶箱(隨機科), E: 出口
+        // 為了展示方便，我手寫一個固定的迷宮地圖，並預埋好題目和寶箱
+        // 'Q' 和 'B' 後面的數字代表科目索引 (0-4: 國英數社自)
+
+        const mazeLayout = [
+            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+            [0,1,1,0,0,0,0,0,0,0,0,0,0,0,0], // (1,1) 起點
+            [0,1,0,1,1,1,0,1,1,1,0,1,1,0,0],
+            [0,1,0,1,0,1,0,1,0,1,0,1,0,0,0],
+            [0,1,1,1,0,1,1,1,0,1,0,1,1,1,0], // (11,4) B2黃
+            [0,0,0,0,0,0,0,0,0,0,0,0,0,1,0],
+            [0,1,1,1,0,1,1,1,1,1,1,1,0,1,0], // (2,6) Q1英
+            [0,1,0,1,0,1,0,0,0,0,0,1,0,1,0],
+            [0,1,0,1,1,1,1,1,0,0,0,1,0,1,0], // (8,8) Q3社
+            [0,1,0,0,0,0,0,1,0,0,0,1,0,1,0],
+            [0,1,1,1,0,1,1,1,0,1,1,1,0,1,0], // (11,10) Q4自
+            [0,0,0,1,0,1,0,0,0,1,0,0,0,1,0],
+            [0,1,1,1,0,1,1,1,0,1,1,1,0,1,0], // (2,12) Q0國
+            [0,1,0,0,0,0,0,1,0,1,0,1,0,1,0],
+            [0,0,0,0,0,0,0,0,0,0,0,0,0,1,0], // (13,14) 出口前的牆
+            [0,0,0,0,0,0,0,0,0,0,0,0,0,1,0],
+            [0,0,0,0,0,0,0,0,0,0,0,0,0,1,0],
+        ];
+
+        const MAZE_SIZE = 15;
+        // 修正迷宮資料，使其成為標準地圖與內容
+        // 手寫地圖有風險，直接用更簡單的方法：在程式碼中動態插入內容
+        const mazeGrid = [];
+        for(let y=0; y<MAZE_SIZE; y++) {
+            mazeGrid[y] = [];
+            for(let x=0; x<MAZE_SIZE; x++) {
+                // 基礎結構
+                if (x === 0 || x === MAZE_SIZE-1 || y === 0 || y === MAZE_SIZE-1) { mazeGrid[y][x] = 0; } // 外牆
+                else if (x % 2 === 0 && y % 2 === 0) { mazeGrid[y][x] = 0; } // 柱子
+                else { mazeGrid[y][x] = 1; } // 通道
+            }
+        }
+        // 開闢起點、出口、和一些隨機通道
+        mazeGrid[1][2] = 1; mazeGrid[2][1] = 1; // 起點
+        mazeGrid[13][12] = 1; mazeGrid[12][13] = 1; mazeGrid[13][13] = 1; // 出口區域
+
+        // 預埋題目 (★) 和寶箱 (🎁)
+        // [y, x, type, subjectIdx]
+        const poiData = [
+            [2, 3, 'Q', 0], [4, 1, 'B', 0], // 國
+            [6, 5, 'Q', 1], [1, 7, 'B', 1], // 英
+            [8, 7, 'Q', 2], [11, 3, 'B', 2], // 數
+            [10, 11, 'Q', 3], [5, 13, 'B', 3], // 社
+            [12, 1, 'Q', 4], [13, 9, 'B', 4], // 自
+            // 增加多的題目供刷鑰匙
+            [2, 9, 'Q', 0], [6, 11, 'Q', 1], [10, 1, 'Q', 2], [2, 13, 'Q', 3], [12, 13, 'Q', 4]
+        ];
+
+        poiData.forEach(p => {
+            const [y, x, type, sIdx] = p;
+            if(mazeGrid[y][x] === 1) { // 確保在通道上
+                mazeGrid[y][x] = `${type}${sIdx}`;
+            }
+        });
+
+
+        // --- 4. 渲染核心 function ---
+
+        const mazeViewEl = document.getElementById('maze-view');
+        const minimapEl = document.getElementById('minimap');
+
+        function renderMaze() {
+            mazeViewEl.innerHTML = '';
+            minimapEl.innerHTML = '';
+            mazeViewEl.style.gridTemplateColumns = `repeat(${MAZE_SIZE}, 1fr)`;
+            minimapEl.style.gridTemplateColumns = `repeat(${MAZE_SIZE}, 1fr)`;
+
+            for (let y = 0; y < MAZE_SIZE; y++) {
+                for (let x = 0; x < MAZE_SIZE; x++) {
+                    const cellData = mazeGrid[y][x];
+                    
+                    // --- 主視窗 ---
+                    const cellEl = document.createElement('div');
+                    cellEl.className = 'cell';
+
+                    if (x === playerPos.x && y === playerPos.y) {
+                        cellEl.classList.add('player');
+                    } else if (x === exitPos.x && y === exitPos.y) {
+                        cellEl.classList.add('path', 'exit');
+                    } else if (cellData === 0) {
+                        cellEl.classList.add('wall');
+                    } else {
+                        cellEl.classList.add('path');
+                        if (typeof cellData === 'string') {
+                            const type = cellData[0];
+                            const sIdx = cellData[1];
+                            const sName = subjects[sIdx];
+                            cellEl.classList.add('poi');
+                            if (type === 'Q') {
+                                cellEl.classList.add('poi-quiz');
+                                cellEl.style.color = subColors[sName];
+                            } else if (type === 'B') {
+                                cellEl.classList.add('poi-box');
+                            }
+                        }
+                    }
+                    mazeViewEl.appendChild(cellEl);
+
+                    // --- 小地圖 ---
+                    const miniEl = document.createElement('div');
+                    miniEl.className = 'minio-cell';
+                    if (x === playerPos.x && y === playerPos.y) {
+                        miniEl.classList.add('mini-player');
+                    } else if (x === exitPos.x && y === exitPos.y) {
+                        miniEl.classList.add('mini-exit');
+                    } else if (cellData === 0) {
+                        // 牆壁不用管，預設透明
+                    } else if (typeof cellData === 'string') {
+                        if (cellData[0] === 'Q') miniEl.classList.add('mini-quiz');
+                        else if (cellData[0] === 'B') miniEl.classList.add('mini-box');
+                    }
+                    minimapEl.appendChild(miniEl);
+                }
+            }
+        }
+
+        // 渲染下方鑰匙狀態
+        function renderStatus() {
+            subjects.forEach((sName, idx) => {
+                const slotEl = document.getElementById(`key-${sName}`);
+                if (gameState.keysLit[sName]) {
+                    slotEl.classList.add('active');
+                } else {
+                    slotEl.classList.remove('active');
+                }
+                const countEl = slotEl.querySelector('.key-count');
+                countEl.textContent = `x${gameState.keyCounts[sName]}`;
+            });
+        }
+
+
+        // --- 5. 移動與事件邏輯 ---
+
+        function movePlayer(dx, dy) {
+            if (gameState.isGameOver || gameState.activeQuiz) return;
+
+            const nextX = playerPos.x + dx;
+            const nextY = playerPos.y + dy;
+
+            // 碰撞檢測
+            if (nextX < 0 || nextX >= MAZE_SIZE || nextY < 0 || nextY >= MAZE_SIZE || mazeGrid[nextY][nextX] === 0) {
+                return; // 撞牆或出界
+            }
+
+            playerPos.x = nextX;
+            playerPos.y = nextY;
+            renderMaze(); // 更新畫面
+
+            // 觸發事件
+            handleCellEvent(mazeGrid[nextY][nextX], nextX, nextY);
+        }
+
+        function handleCellEvent(cellData, x, y) {
+            // 檢查是否為出口
+            if (x === exitPos.x && y === exitPos.y) {
+                checkWinCondition();
+                return;
+            }
+
+            if (typeof cellData !== 'string') return; // 無事件 通道
+
+            const type = cellData[0];
+            const sIdx = parseInt(cellData[1]);
+            const sName = subjects[sIdx];
+            const poiId = `${x},${y}`;
+
+            if (type === 'Q') {
+                // 如果是題目，不管有沒有訪問過，都可以再答 (刷鑰匙)
+                triggerQuiz(sName, poiId);
+            } else if (type === 'B') {
+                // 如果是寶箱，且擁有的該色鑰匙 > 0，則開啟
+                if (gameState.keyCounts[sName] > 0) {
+                    openBox(sName, poiId);
+                    // 寶箱開啟後，將地圖該處變回普通通道
+                    mazeGrid[y][x] = 1;
+                    renderMaze();
+                } else {
+                    showMsgPopup(`這是一個${sName}寶箱，你需要 1 把${sName}鑰匙才能開啟。`);
+                }
+            }
+        }
+
+        // --- 6. 題目與寶箱功能 ---
+
+        function triggerQuiz(subject, poiId) {
+            const questions = quizBank[subject];
+            const quiz = questions[Math.floor(Math.random() * questions.length)]; // 隨機挑一題
+            
+            gameState.activeQuiz = { subject, poiId, correctAns: quiz.a };
+
+            // 顯示彈出視窗
+            document.getElementById('quiz-subject-label').textContent = `${subject}語文 (國中)`;
+            document.getElementById('quiz-subject-label').style.backgroundColor = subColors[subject];
+            document.getElementById('quiz-question-text').textContent = quiz.q;
+
+            const optionsContainer = document.getElementById('quiz-options-container');
+            optionsContainer.innerHTML = '';
+            quiz.o.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.textContent = opt;
+                btn.onclick = () => answerQuiz(idx);
+                optionsContainer.appendChild(btn);
+            });
+
+            showPopup('quiz-popup');
+        }
+
+        function answerQuiz(selectedIdx) {
+            const { subject, poiId, correctAns } = gameState.activeQuiz;
+
+            if (selectedIdx === correctAns) {
+                // 答對
+                // 1. 點亮下方大鑰匙
+                gameState.keysLit[subject] = true;
+                // 2. 該色鑰匙數量 +1
+                gameState.keyCounts[subject]++;
+                renderStatus();
+                showMsgPopup(`🎉 答對了！<br>獲得【${subject}鑰匙】x1 (已點亮)<br>多的鑰匙可以用來開同色寶箱。`);
+            } else {
+                // 答錯
+                showMsgPopup(`❌ 答錯了...<br>再接再厲！請去尋找別的題目點試試。`);
+            }
+
+            gameState.activeQuiz = null;
+            closePopup('quiz-popup');
+        }
+
+        function openBox(subject, poiId) {
+            gameState.boxesOpened++;
+            // 消耗鑰匙
+            gameState.keyCounts[subject]--;
+            renderStatus();
+
+            // 隨機生成一個其他科目的答案卷軸
+            const otherSubjects = subjects.filter(s => s !== subject);
+            const hintSubject = otherSubjects[Math.floor(Math.random() * otherSubjects.length)];
+            const questions = quizBank[hintSubject];
+            const quiz = questions[0]; // 偷懶取第一題
+            
+            showMsgPopup(`🎁 開啟${subject}寶箱！ (消耗鑰匙x1)<br><br><b>📜 情報卷軸：</b><br>在迷宮某處的《${hintSubject}語文》題目，答案是：<br>${quiz.o[quiz.a]}`);
+        }
+
+        // --- 7. 通關與介面控制 ---
+
+        function checkWinCondition() {
+            const allKeysLit = subjects.every(s => gameState.keysLit[s]);
+            if (allKeysLit) {
+                // 通關
+                gameState.isGameOver = true;
+                const endTime = Date.now();
+                const duration = Math.floor((endTime - gameState.startTime) / 1000);
+
+                // 填充證書資料
+                document.getElementById('player-name-cert').textContent = '李同學';
+                document.getElementById('cert-time').textContent = duration;
+                document.getElementById('cert-boxes').textContent = gameState.boxesOpened;
+                document.getElementById('cert-id').textContent = Math.floor(Math.random()*10000);
+
+                showPopup('certificate-popup');
+            } else {
+                // 鑰匙未齊
+                showMsgPopup(`走到出口了！<br>但是你需要集齊【國英數社自】五把鑰匙才能開門。<br>請回迷宮繼續探索。`);
+            }
+        }
+
+        function showPopup(id) {
+            document.getElementById(id).classList.add('show');
+        }
+        function closePopup(id) {
+            document.getElementById(id).classList.remove('show');
+        }
+
+        function showMsgPopup(text) {
+            document.getElementById('msg-text').innerHTML = text;
+            showPopup('msg-popup');
+        }
+
+        // 鍵盤移動控制 (PC)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp' || e.key === 'w') movePlayer(0, -1);
+            if (e.key === 'ArrowDown' || e.key === 's') movePlayer(0, 1);
+            if (e.key === 'ArrowLeft' || e.key === 'a') movePlayer(-1, 0);
+            if (e.key === 'ArrowRight' || e.key === 'd') movePlayer(1, 0);
+        });
+
+
+        // --- 初始化 ---
+        renderMaze();
+        renderStatus();
+        showMsgPopup(`<b>歡迎來到 2D 國中全科迷宮！</b><br><br>1. 使用【方向鍵/按鈕】移動。<br>2. 找到題目點 (★) 並答對，點亮【5科鑰匙】。<br>3. 多餘鑰匙可開啟同色寶箱 (🎁) 獲取情報。<br>4. 集齊 5 色後前往右下角出口。`);
+
+    </script>
+</body>
+</html>
